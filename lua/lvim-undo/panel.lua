@@ -915,6 +915,7 @@ local function footer_of(mode)
         end)
     end
     chips[#chips + 1] = { type = "separator", text = "●", style = { padding = { 1, 1 }, hl = "LvimUiFooterSep" } }
+    chip(k.help, l.help, show_help) -- the cheatsheet is not discoverable from the tree: the bar has to say where it is
     chip(k.close .. "/Esc", l.close, function(st)
         st.close()
     end)

@@ -157,7 +157,7 @@ return {
         diffsplit = "S", -- scratch + :diffthis against the live buffer
         expand = "l", -- expand a collapsed branch
         collapse = "h", -- collapse a branch / jump to the fork row
-        help = "g?",
+        help = "g?", -- the set-wide cheatsheet chord (the panel owns the `g` prefix — see lvim-ui)
         close = "q",
     },
 
@@ -180,6 +180,7 @@ return {
         view = "view",
         search = "search",
         scratch = "scratch",
+        help = "help",
         close = "close",
         view_all = "all",
         view_current = "current",
