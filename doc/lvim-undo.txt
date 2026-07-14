@@ -1,0 +1,253 @@
+*lvim-undo.txt*          A navigable, branching undo-history timeline
+
+==============================================================================
+CONTENTS                                                          *lvim-undo*
+
+  1. Introduction ........................... |lvim-undo-intro|
+  2. Setup .................................. |lvim-undo-setup|
+  3. Command ................................ |lvim-undo-command|
+  4. Panel keys ............................. |lvim-undo-panel|
+  5. Search / filter ........................ |lvim-undo-search|
+  6. Project view ........................... |lvim-undo-project|
+  7. API .................................... |lvim-undo-api|
+  8. Events ................................. |lvim-undo-events|
+  9. Persistence ............................ |lvim-undo-persistence|
+ 10. Highlights ............................. |lvim-undo-highlights|
+ 11. Health ................................. |lvim-undo-health|
+
+==============================================================================
+1. INTRODUCTION                                             *lvim-undo-intro*
+
+Every undo state of the buffer is a row in a foldable graph: walk it, scrub a
+live diff of any state against the current one, restore any state (across
+branches), tag the states worth remembering, inspect an old state in a
+scratch buffer or a diffsplit without touching the live buffer, and list
+recent checkpoints across the whole project.
+
+The undo tree always comes from Neovim itself (|undotree()|); the plugin never
+keeps a shadow copy of the history. The only thing it stores is METADATA —
+tags and named checkpoints — in its own SQLite database, keyed so a purged or
+rewritten undofile can never resurrect stale marks.
+
+The timeline panel shows the buffer's whole undo graph as a tree: the main
+chain newest-first, every fork carrying its alternate branches as foldable
+children, the origin (state 0) at the bottom. The current state wears the ➤
+marker; a state the file was written at wears the save icon; tags and named
+checkpoints render as badge boxes on their rows.
+
+The diff preview beside the timeline follows the cursor (debounced): the
+difference between the state under the cursor and the current state. Engines:
+Neovim's native |vim.text.diff| (the default — no external process, per-line
+highlight groups), or `delta` / `difft` / `diff` — run on a PTY and rendered
+with their real ANSI colours in a terminal buffer.
+
+Requires Neovim >= 0.12, lvim-utils and lvim-ui. Optional: sqlite.lua for
+persistent tags, delta/difft/diff for the external engines.
+
+==============================================================================
+2. SETUP                                                    *lvim-undo-setup*
+
+Call `setup()` (optionally with overrides — they merge into the defaults):
+>lua
+  require("lvim-undo").setup({
+      layout = "float",            -- float | area | bottom
+      width = 0.4,                 -- the timeline's share; the preview takes the rest
+      preview_side = "right",      -- right | left | above | below
+      time_format = "relative",    -- relative | pretty | absolute
+      absolute_format = "%Y-%m-%d %H:%M:%S",
+      view = "all",                -- all | current (the initial timeline view)
+
+      diff = {
+          engine = "native",       -- native | delta | difft | diff
+          preview_on_move = true,  -- the diff follows the timeline cursor
+          debounce = 40,
+          native = { result_type = "unified", ctxlen = 3, algorithm = "histogram" },
+          external = {             -- per-tool argv (the two state files are appended)
+              delta = { "--side-by-side", "--line-numbers", "--navigate",
+                        "--file-style=omit", "--hunk-header-style=omit" },
+              difft = { "--display=inline" },
+              diff = { "-u" },
+          },
+      },
+
+      persist = {
+          tags = true,             -- sqlite store; false = tags are session-only
+          max_file_size = 1024 * 1024, -- above this: no persistent undo (false = off)
+          exclude_filetypes = {},  -- filetypes that never get persistent undo
+      },
+
+      checkpoints = {
+          auto = { format = false, lsp_rename = false, build = false },
+          labels = { format = "before format", lsp_rename = "before rename",
+                     build = "before build" },
+          build_event = "LvimBuildStart",
+      },
+
+      search = { max_states = 400 },  -- content search walks at most this many states
+      project = { limit = 100 },      -- rows in the project checkpoints view
+  })
+<
+Every key, title, label, icon and colour role is also configurable — see the
+`keys` / `titles` / `labels` / `icons` / `colors` tables in the README's full
+default config. Colour entries name a palette accent and a tint role from the
+shared lvim-utils scale, so the panel tracks the live theme.
+
+==============================================================================
+3. COMMAND                                                *lvim-undo-command*
+
+                                                                   *:LvimUndo*
+One command with subcommands (completing its own subcommands). A layout token
+(`float` | `area` | `bottom`) may appear anywhere in the arguments and is
+sticky for the session.
+>vim
+  :LvimUndo                     " toggle the timeline panel
+  :LvimUndo open | close        " explicit open / close
+  :LvimUndo project             " open on the Project tab
+  :LvimUndo bottom              " toggle, docked at the bottom
+  :LvimUndo purge               " purge THIS buffer's undo history (confirm)
+  :LvimUndo! purge              " ... skipping the confirmation
+  :LvimUndo purge-all           " purge ALL undofiles + every stored mark
+  :LvimUndo checkpoint <name>   " named checkpoint at the current state
+  :LvimUndo log                 " the session action log
+  :LvimUndo log-clear           " clear it
+<
+Purging a buffer deletes its undofile, clears the in-memory tree (the
+documented 'undolevels' round trip — the text is untouched) and drops the
+buffer's stored marks. Purging all deletes every file in every 'undodir'
+directory and every stored mark.
+
+==============================================================================
+4. PANEL KEYS                                               *lvim-undo-panel*
+
+All keys are configurable via `keys` in setup; the defaults:
+
+  <CR>      restore the selected state / open a project row
+  u         undo one step in the real buffer (the panel follows)
+  <C-r>     redo one step
+  p         refresh the diff preview
+  t         edit the selected state's tags (space-separated, empty clears)
+  c         toggle whole tree / current timeline
+  /         filter: #tag, @hour, @today, content text
+  s         open the selected state in a read-only scratch vsplit
+  S         scratch + :diffthis against the live buffer
+  l         expand a collapsed branch
+  h         collapse a branch / jump to the fork row
+  r         refresh the timeline (re-reads marks + the undo tree)
+  g?        the keymap cheatsheet
+  q         close
+
+Restoring runs `:undo N` in the source buffer — Neovim jumps across branches
+natively. The scratch buffer is highlighted by LANGUAGE (never by setting
+'filetype', so no LSP attaches to a transient buffer); closing a diffsplit
+scratch unwinds diff mode on the source window.
+
+==============================================================================
+5. SEARCH / FILTER                                         *lvim-undo-search*
+
+The `/` input accepts, in any combination:
+
+  #frag        keep states carrying a tag / checkpoint matching `frag`
+  @hour        keep states from the last hour
+  @today       keep states from today
+  anything     CONTENT search: keep states whose OWN change (the diff against
+               their parent) touches the text
+
+A content query walks at most `search.max_states` newest states through one
+batched undo walk; only the +/- lines of each state's diff are searched. An
+empty input clears the filter. The active filter renders in the panel header
+and the border counter shows shown/total.
+
+==============================================================================
+6. PROJECT VIEW                                           *lvim-undo-project*
+
+The second tab lists every stored tag and named checkpoint ACROSS every file,
+newest first (`project.limit` rows). Activating a row opens its file and — when
+the stored state still exists in that file's live undo tree (the seq-timestamp
+staleness guard) — restores to it. Undo history is per-file in Neovim; the
+metadata store is not, which is what makes "what did I change in the last
+hour, anywhere" answerable.
+
+==============================================================================
+7. API                                                        *lvim-undo-api*
+
+>lua
+  local undo = require("lvim-undo")
+
+  undo.open({ layout = "float", tab = "timeline" })  -- both optional
+  undo.close()
+  undo.toggle()
+
+  undo.checkpoint(name, { buf = 0 })  -- named checkpoint at the buffer's
+                                      -- current state; false on a non-file
+                                      -- buffer. The seam other plugins call
+                                      -- before an operation worth remembering.
+
+  undo.purge(force)                   -- this buffer (force skips the confirm)
+  undo.purge_all(force)               -- every undofile + every stored mark
+  undo.show_log()
+  undo.clear_log()
+<
+==============================================================================
+8. EVENTS                                                  *lvim-undo-events*
+
+|User| autocmds fire on every noteworthy action, each with a `data` payload:
+
+  LvimUndoCheckpoint    a named checkpoint was recorded   { file, seq, name }
+  LvimUndoRestore       a state was restored              { file, seq }
+  LvimUndoStep          undo/redo stepped from the panel  { file, dir }
+  LvimUndoPurge         undofiles were purged             { scope, file?, removed? }
+  LvimUndoTags          a state's tag set was written     { file, seq, tags }
+
+==============================================================================
+9. PERSISTENCE                                        *lvim-undo-persistence*
+
+Tags and checkpoints live in the plugin's OWN SQLite database under
+`stdpath("data")/lvim-undo/`, through the shared lvim-utils store wrapper.
+Each mark is keyed by (file, seq, seq_time) — the undo entry's own timestamp —
+so a row whose state no longer exists in the live tree is stale and silently
+skipped: seq numbers are reused after a purge, the timestamp is not.
+
+Tags survive restarts and die with a purge. With `persist.tags = false` (or
+without sqlite.lua) the same API runs over an in-memory table — tags become
+session-only without any caller changing.
+
+The persistence FILTER only ever disables: a buffer over
+`persist.max_file_size`, an excluded filetype, or any non-file buffer
+(`buftype` chrome) gets 'undofile' turned off; whether persistent undo is on
+at all stays your 'undofile' choice.
+
+==============================================================================
+10. HIGHLIGHTS                                         *lvim-undo-highlights*
+
+Every group is built from the live lvim-utils palette and the `colors` roles,
+registered through the shared highlight factory, re-derived on |ColorScheme|:
+
+  LvimUndoCurrent           the ➤ current-state marker + its seq
+  LvimUndoSeq               a state's sequence number
+  LvimUndoTime              the age cell
+  LvimUndoSaved             the saved-state icon
+  LvimUndoTagBadge          a tag badge box
+  LvimUndoCheckpointBadge   a named-checkpoint badge box
+  LvimUndoFile              a project row's file name
+  LvimUndoEmpty             placeholders
+  LvimUndoHeader            the panel header band (file ➤ view ➤ filter)
+  LvimUndoAdded             native diff: added lines
+  LvimUndoRemoved           native diff: removed lines
+  LvimUndoHunk              native diff: @@ hunk headers
+  LvimUndoContext           native diff: context lines
+  LvimUndoHelpKeyOdd/Even, LvimUndoHelpDescOdd/Even,
+  LvimUndoHelpDescActiveOdd/Even    the cheatsheet striping
+
+==============================================================================
+11. HEALTH                                                 *lvim-undo-health*
+
+>vim
+  :checkhealth lvim-undo
+<
+Reports: the Neovim version gate, lvim-ui/lvim-utils presence, whether
+'undofile' is on and 'undodir' writable, undodir usage (files / size), which
+external diff engines resolve on $PATH, which persistence backend the tag
+store opened, and the persistence-filter verdict for the CURRENT buffer —
+answering "why is nothing being remembered here?".
+
+vim:tw=78:ts=8:noet:ft=help:norl:
