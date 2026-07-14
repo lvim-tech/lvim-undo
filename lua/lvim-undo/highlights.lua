@@ -71,11 +71,6 @@ function M.build()
         return { fg = a, bg = t and mtint(a, t) or nil, bold = bold or nil }
     end
 
-    local help = col.help
-    local odd, even = accent(help.odd), accent(help.even)
-    local kt = tint_of(help.key_tint, tints) or 0
-    local dt = tint_of(help.desc_tint, tints) or 0
-
     return {
         -- timeline rows
         LvimUndoCurrent = badge(col.current, true), -- the ➤ current-state marker + its seq
@@ -93,15 +88,6 @@ function M.build()
         LvimUndoRemoved = fg(col.removed),
         LvimUndoHunk = { fg = accent(col.hunk.accent), bold = true },
         LvimUndoContext = fg(col.context),
-
-        -- the help window (the striping canon: odd blue / even yellow, key box above the desc box;
-        -- the ACTIVE row's description rises to the key tint so the row reads as one solid block)
-        LvimUndoHelpKeyOdd = { fg = odd, bg = mtint(odd, kt), bold = true },
-        LvimUndoHelpDescOdd = { fg = odd, bg = mtint(odd, dt) },
-        LvimUndoHelpDescActiveOdd = { fg = odd, bg = mtint(odd, kt) },
-        LvimUndoHelpKeyEven = { fg = even, bg = mtint(even, kt), bold = true },
-        LvimUndoHelpDescEven = { fg = even, bg = mtint(even, dt) },
-        LvimUndoHelpDescActiveEven = { fg = even, bg = mtint(even, kt) },
     }
 end
 

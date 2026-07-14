@@ -48,12 +48,6 @@
 ---@field accent string                   a lvim-utils palette key ("blue", …) or a literal "#rrggbb"
 ---@field tint string|number|nil          a tint ROLE name from lvim-utils.config.ui (`tint.<role>`) or a raw factor
 
----@class LvimUndoHelpColors
----@field odd string                      accent of the odd help rows (the striping canon)
----@field even string                     accent of the even help rows
----@field key_tint string|number          tint role of the KEY box
----@field desc_tint string|number         tint role of the DESCRIPTION box (the active row rises to key_tint)
-
 ---@class LvimUndoColors
 ---@field current LvimUndoColor           the current state's row marker
 ---@field state LvimUndoColor             a state's sequence number
@@ -68,7 +62,6 @@
 ---@field context LvimUndoColor           native diff: context lines
 ---@field empty LvimUndoColor             placeholders
 ---@field filter LvimUndoColor            the panel header band
----@field help LvimUndoHelpColors         the cheatsheet striping
 
 ---@class LvimUndoConfig
 ---@field layout "float"|"area"|"bottom"  how the panel opens (the layout canon)
@@ -228,6 +221,5 @@ return {
         context = { accent = "comment" }, -- native diff: context lines
         empty = { accent = "comment" }, -- placeholders
         filter = { accent = "green", tint = "strong" }, -- the panel header (file ➤ view ➤ filter)
-        help = { odd = "blue", even = "yellow", key_tint = "bright", desc_tint = "strong" },
     },
 }

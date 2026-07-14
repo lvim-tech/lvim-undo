@@ -728,72 +728,11 @@ local function show_help()
             items[#items + 1] = { lhs, e[2] }
         end
     end
-    local kw, dw = 0, 0
-    for _, r in ipairs(items) do
-        kw = math.max(kw, vim.fn.strdisplaywidth(r[1]))
-        dw = math.max(dw, vim.fn.strdisplaywidth(r[2]))
-    end
-    local keybox = kw + 4 -- 2 spaces left of the key + the key + ≥2 right — the aligned KEY column
-
-    local pan
-    local provider = {
-        hide_cursor = true,
-        size = function()
-            return keybox + dw + 4, #items
-        end,
-        render = function(width)
-            local cur = (pan and pan.win and api.nvim_win_is_valid(pan.win)) and api.nvim_win_get_cursor(pan.win)[1]
-                or 1
-            local lines, hls = {}, {}
-            for i, r in ipairs(items) do
-                local side = (i % 2 == 1) and "Odd" or "Even"
-                local kcell = "  " .. r[1]
-                kcell = kcell .. string.rep(" ", math.max(0, keybox - #kcell))
-                local dcell = "  " .. r[2]
-                dcell = dcell .. string.rep(" ", math.max(0, width - keybox - #dcell))
-                lines[i] = kcell .. dcell
-                local desc = (i == cur) and ("LvimUndoHelpDescActive" .. side) or ("LvimUndoHelpDesc" .. side)
-                hls[#hls + 1] = { i - 1, 0, #kcell, "LvimUndoHelpKey" .. side }
-                hls[#hls + 1] = { i - 1, #kcell, #lines[i], desc }
-            end
-            return lines, hls
-        end,
-        keys = function(_, p)
-            pan = p
-            -- Re-render so the brighter active-row tint follows the (hidden) cursor.
-            api.nvim_create_autocmd("CursorMoved", {
-                buffer = p.buf,
-                callback = function()
-                    if p.refresh then
-                        p.refresh()
-                    end
-                end,
-            })
-        end,
-    }
-    surface.open({
-        mode = "float",
-        border = surface.FRAME_BORDER,
-        title = " " .. config.titles.help,
-        panel_border = "none",
-        size = { width = { auto = true, max = 0.7 }, height = { auto = true, max = 0.7 } },
+    -- The rows, the striping, the colours and the window are the shared component's (`lvim-ui.help`).
+    ui.help({
+        title = config.titles.help,
+        items = items,
         close_keys = { config.keys.close, "<Esc>", config.keys.help },
-        content = { blocks = { { id = "help", provider = provider } } },
-        footer = {
-            bars = {
-                {
-                    items = {
-                        {
-                            key = config.keys.close,
-                            name = config.labels.close,
-                            run = function(st)
-                                st.close()
-                            end,
-                        },
-                    },
-                },
-            },
-        },
     })
 end
 
