@@ -590,7 +590,7 @@ local function edit_tags()
     end
     local existing = state.marks[seq] and table.concat(state.marks[seq].tags, " ") or ""
     ui.input({
-        title = " " .. config.titles.tag,
+        title = config.titles.tag,
         default = existing,
         callback = function(confirmed, value)
             if confirmed ~= true then
@@ -611,7 +611,7 @@ end
 --- The `/` filter input: parse tag/age/content tokens; a content token runs the batched search.
 local function open_search()
     ui.input({
-        title = " " .. config.titles.search,
+        title = config.titles.search,
         default = state.query,
         callback = function(confirmed, value)
             if confirmed ~= true then

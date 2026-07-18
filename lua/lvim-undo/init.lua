@@ -124,7 +124,7 @@ function M.show_log()
     if #lines == 0 then
         lines = { config.labels.log_empty }
     end
-    require("lvim-ui").info(lines, { title = " " .. config.titles.log, hide_cursor = true })
+    require("lvim-ui").info(lines, { title = config.titles.log, hide_cursor = true })
 end
 
 --- Clear the session action log.
