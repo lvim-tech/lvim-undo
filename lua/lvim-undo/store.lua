@@ -200,9 +200,10 @@ end
 --- untouched; the transient change is wrapped `noautocmd` and the `modified` flag is restored, so
 --- the round trip is invisible.
 ---@param buf integer
+---@return boolean cleared  false when the buffer is not modifiable (the in-memory tree is left intact)
 local function clear_memory(buf)
     if not vim.bo[buf].modifiable then
-        return
+        return false
     end
     api.nvim_buf_call(buf, function()
         local ul = vim.bo[buf].undolevels
@@ -212,12 +213,15 @@ local function clear_memory(buf)
         vim.bo[buf].undolevels = ul
         vim.bo[buf].modified = was_modified
     end)
+    return true
 end
 
 --- Purge THIS buffer's undo history: its undofile on disk, the in-memory tree, and its stored
---- marks. Returns false (with a reason) on a buffer that has no file behind it.
+--- marks. Returns false (with a reason) on a buffer that has no file behind it. On a NON-modifiable
+--- buffer the undofile + marks are still purged but the live tree cannot be flushed — that returns
+--- true with an informational note as the second value (not an error) so the caller can say so.
 ---@param buf integer
----@return boolean ok, string? err
+---@return boolean ok, string? note_or_err
 function M.purge_buffer(buf)
     if not (buf and api.nvim_buf_is_valid(buf)) then
         return false, "invalid buffer"
@@ -230,11 +234,19 @@ function M.purge_buffer(buf)
     if vim.fn.filereadable(undofile) == 1 then
         pcall(vim.fn.delete, undofile)
     end
-    clear_memory(buf)
+    local cleared = clear_memory(buf)
     M.drop_file(vim.fs.normalize(file))
-    log.add(("purged undo history of %s"):format(vim.fn.fnamemodify(file, ":~:.")))
-    log.event("Purge", { scope = "buffer", file = file })
-    return true
+    local rel = vim.fn.fnamemodify(file, ":~:.")
+    if cleared then
+        log.add(("purged undo history of %s"):format(rel))
+        log.event("Purge", { scope = "buffer", file = file })
+        return true
+    end
+    -- undofile + marks are gone, but the in-memory tree survives (a nonmodifiable buffer can't be
+    -- flushed via :h clear-undo) — say so instead of an unqualified "purged".
+    log.add(("purged undofile + marks of %s; in-memory history kept (buffer not modifiable)"):format(rel))
+    log.event("Purge", { scope = "buffer", file = file, memory_kept = true })
+    return true, "undofile + marks purged; in-memory history kept — buffer not modifiable"
 end
 
 --- Purge ALL undofiles (every file in every 'undodir' directory), every stored mark, and the
@@ -247,7 +259,10 @@ function M.purge_all()
         dir = vim.fs.normalize(dir)
         if vim.fn.isdirectory(dir) == 1 then
             for name, kind in vim.fs.dir(dir) do
-                if kind == "file" then
+                -- Undofile names are the source path %-encoded (every absolute path starts "/" → a
+                -- leading "%"), so a name WITHOUT a "%" is a stray non-undofile — skip it rather than
+                -- delete-and-count it as a purged undofile.
+                if kind == "file" and name:find("%%") then
                     if pcall(vim.fn.delete, dir .. "/" .. name) then
                         removed = removed + 1
                     end

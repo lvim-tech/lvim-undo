@@ -72,12 +72,13 @@ end
 function M.purge(force)
     local buf = api.nvim_get_current_buf()
     local function run()
-        local ok, err = store.purge_buffer(buf)
+        local ok, msg = store.purge_buffer(buf)
         if ok then
-            notify("undo history purged")
+            -- msg is a caveat note on a partial purge (nonmodifiable buffer), nil on a full purge
+            notify(msg or "undo history purged", msg and vim.log.levels.WARN or nil)
             panel.refresh()
         else
-            notify(err or "purge failed", vim.log.levels.WARN)
+            notify(msg or "purge failed", vim.log.levels.WARN)
         end
     end
     if force then
@@ -147,7 +148,10 @@ local function install_auto()
         local orig = vim.lsp.buf.format
         ---@diagnostic disable-next-line: duplicate-set-field
         vim.lsp.buf.format = function(...)
-            M.checkpoint(labels.format)
+            -- vim.lsp.buf.format({ bufnr = X }) can format a buffer OTHER than the current one (e.g. a
+            -- format-on-save loop): checkpoint that exact buffer, not whichever happens to be current.
+            local o = select(1, ...)
+            M.checkpoint(labels.format, { buf = type(o) == "table" and o.bufnr or nil })
             return orig(...)
         end
     end
