@@ -33,7 +33,7 @@ local iconlib = require("lvim-utils.icons")
 local M = {}
 
 local api = vim.api
-local uv = vim.uv or vim.loop
+local uv = vim.uv
 
 ---@class LvimUndoOpenOpts
 ---@field layout string|nil            per-open layout override ("float" | "area" | "bottom"; session-sticky)
