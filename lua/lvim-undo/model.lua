@@ -255,7 +255,11 @@ function M.texts_at(buf, seqs)
     api.nvim_buf_call(mirror, function()
         for _, seq in ipairs(seqs) do
             if out[seq] == nil then
-                if pcall(vim.cmd, ("silent undo %d"):format(seq)) then
+                if
+                    pcall(function()
+                        vim.cmd(("silent undo %d"):format(seq))
+                    end)
+                then
                     out[seq] = api.nvim_buf_get_lines(mirror, 0, -1, false)
                 end
             end

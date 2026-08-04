@@ -209,7 +209,9 @@ local function clear_memory(buf)
         local ul = vim.bo[buf].undolevels
         local was_modified = vim.bo[buf].modified
         vim.bo[buf].undolevels = -1
-        pcall(vim.cmd, [[noautocmd silent execute "normal! a \<BS>\<Esc>"]])
+        pcall(function()
+            vim.cmd([[noautocmd silent execute "normal! a \<BS>\<Esc>"]])
+        end)
         vim.bo[buf].undolevels = ul
         vim.bo[buf].modified = was_modified
     end)

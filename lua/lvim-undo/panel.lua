@@ -25,9 +25,7 @@ local store = require("lvim-undo.store")
 local diff = require("lvim-undo.diff")
 local log = require("lvim-undo.log")
 local ui = require("lvim-ui")
-local surface = require("lvim-ui.surface")
 local uipreview = require("lvim-ui.preview")
-local uhl = require("lvim-utils.highlight")
 local iconlib = require("lvim-utils.icons")
 
 local M = {}
@@ -508,7 +506,9 @@ local function restore_state(seq)
         return
     end
     api.nvim_buf_call(buf, function()
-        pcall(vim.cmd, ("silent undo %d"):format(seq))
+        pcall(function()
+            vim.cmd(("silent undo %d"):format(seq))
+        end)
     end)
     local file = api.nvim_buf_get_name(buf)
     log.add(("restored %s to seq %d"):format(vim.fn.fnamemodify(file, ":~:."), seq))
@@ -541,7 +541,9 @@ local function open_project_row(row)
         return
     end
     api.nvim_buf_call(buf, function()
-        pcall(vim.cmd, ("silent undo %d"):format(row.seq))
+        pcall(function()
+            vim.cmd(("silent undo %d"):format(row.seq))
+        end)
     end)
     log.add(("opened %s at seq %d"):format(vim.fn.fnamemodify(row.file, ":~:."), row.seq))
     log.event("Restore", { file = row.file, seq = row.seq })
@@ -568,7 +570,9 @@ local function step(dir)
         return
     end
     api.nvim_buf_call(buf, function()
-        pcall(vim.cmd, "silent " .. dir)
+        pcall(function()
+            vim.cmd("silent " .. dir)
+        end)
     end)
     log.event("Step", { file = api.nvim_buf_get_name(buf), dir = dir })
     M.refresh()
@@ -688,7 +692,7 @@ local function open_scratch(diffmode)
             callback = function()
                 if src_win and api.nvim_win_is_valid(src_win) then
                     api.nvim_win_call(src_win, function()
-                        pcall(vim.cmd, "diffoff")
+                        pcall(vim.cmd.diffoff)
                     end)
                 end
             end,
